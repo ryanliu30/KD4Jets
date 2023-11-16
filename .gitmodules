@@ -1,0 +1,3 @@
+[submodule "LorentzNet-release"]
+	path = LorentzNet-release
+	url = git@github.com:sdogsq/LorentzNet-release.git
