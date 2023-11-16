@@ -21,4 +21,5 @@ Welcome to code repository for Efficient and Robust Jet Tagging at the LHC with 
 ```
 git clone https://github.com/ryanliu30/KD4Jets.git
 conda create -n KD4Jets python=3.11
+pip install -r requirements.txt
 ```
