@@ -1,4 +1,4 @@
-led / optimized / DLL files
+optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -127,3 +127,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Data Storage
+data/*
