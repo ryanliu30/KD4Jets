@@ -48,10 +48,10 @@ six==1.16.0
 smmap==5.0.1
 sympy==1.12
 threadpoolctl==3.2.0
-torch==2.1.1+cu118
-torchaudio==2.1.1+cu118
+torch==2.1.1
+torchaudio==2.1.1
 torchmetrics==1.2.0
-torchvision==0.16.1+cu118
+torchvision==0.16.1
 tqdm==4.66.1
 triton==2.1.0
 typing_extensions==4.4.0
