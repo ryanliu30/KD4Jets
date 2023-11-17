@@ -73,7 +73,7 @@ class MLPTagger(nn.Module):
         z = self.mlp(features)
         output = self.output_layer(z)
         
-        return output, {"rep": z}
+        return output, z
     
 def norm(x):
     return torch.linalg.vector_norm(x, dim=-1, keepdim=True)

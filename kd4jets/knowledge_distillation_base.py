@@ -2,7 +2,7 @@
 import sys
 
 # 3rd party imports
-from pytorch_lightning import LightningModule
+from lightning.pytorch.core import LightningModule
 import torch
 from torch.utils.data import random_split, DataLoader
 import numpy as np
@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import wandb
 from sklearn.decomposition import PCA
 
-# from .dataset import retrieve_dataloaders
+from lorentz_net.top.dataset import retrieve_dataloaders
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 matplotlib.use('agg')
@@ -26,12 +26,12 @@ class KnowledgeDistillationBase(LightningModule):
     def __init__(self, hparams):
         super().__init__()
         """
-        Initialise the Lightning Module
+        Initialize the Lightning Module
         """
         self.save_hyperparameters(hparams)
         
         # Initialize Datasets
-        self.loaders = retrieve_dataloaders(hparams["batch_size"])
+        self.loaders = retrieve_dataloaders(hparams["batch_size"], num_workers=1)
         
         # Initialize models
         self.student = self.get_student(hparams)
@@ -93,22 +93,13 @@ class KnowledgeDistillationBase(LightningModule):
             }
         ]
         return optimizer, scheduler
+        
     @property
     def decay(self):
         if "auxiliary_teacher" in self.hparams:
             return 1 - torch.clamp(self.num_iter/self.hparams["auxiliary_teacher"], 0, 1)
         else:
             return 1
-    
-    def mse_loss(self, label, from_student, from_teacher):
-        return F.mse_loss(from_student, from_teacher)
-    
-    def dist_loss(self, label, from_student, from_teacher):
-        
-        student_dist_matrix = torch.sqrt(1e-6 + (from_student.unsqueeze(0) - from_student.unsqueeze(1)).square().sum(-1))
-        teacher_dist_matrix = torch.sqrt(1e-6 + (from_teacher.unsqueeze(0) - from_teacher.unsqueeze(1)).square().sum(-1))
-        
-        return F.mse_loss(student_dist_matrix, teacher_dist_matrix)
     
     def training_step(self, batch, batch_idx):
         self.num_iter += 1
@@ -136,12 +127,6 @@ class KnowledgeDistillationBase(LightningModule):
             self.log("training_soft_loss", soft_loss)
         else:
             loss = hard_loss
-        
-        
-        for name, (feature_name, weight) in self.hparams["guidance"].items():
-            guidance_loss = getattr(self, f"{name}_loss")(labels, student_features[feature_name], teacher_features[feature_name])
-            loss += self.decay * weight * guidance_loss
-            self.log(f"training_{name}_{feature_name}_guidance", guidance_loss)
             
         self.log("training_loss", loss)
         
@@ -171,12 +156,6 @@ class KnowledgeDistillationBase(LightningModule):
         else:
             loss = hard_loss
             
-        feature_names = ["rep", "emb"]
-        for name, (feature_name, weight) in self.hparams["guidance"].items():
-            guidance_loss = getattr(self, f"{name}_loss")(labels, student_features[feature_name], teacher_features[feature_name])
-            loss += self.decay * weight * guidance_loss
-            self.log(f"val_{name}_{feature_name}_guidance", guidance_loss)
-            
         self.log("val_loss", loss)
         
         # store predictions
@@ -190,7 +169,7 @@ class KnowledgeDistillationBase(LightningModule):
         return (
             labels.cpu().numpy(),
             prob.cpu().numpy(),
-            student_features["rep"].cpu().numpy(),
+            student_features.cpu().numpy(),
             boosted_pred.cpu().numpy(),
             beta.numpy()
         )
@@ -268,9 +247,6 @@ class KnowledgeDistillationBase(LightningModule):
         optimizer,
         optimizer_closure,
         ):
-        """
-        Use this to manually enforce warm-up. In the future, this may become built-into PyLightning
-        """
         # warm up lr
         if (self.hparams["warmup"] is not None) and (
             self.trainer.global_step < self.hparams["warmup"]

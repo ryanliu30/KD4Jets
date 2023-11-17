@@ -1,11 +1,12 @@
 import torch
 from torch import nn
+from lorentz_net import LorentzNet, psi
 
 class LorentzNetWrapper(nn.Module):
     def __init__(self):
         super().__init__()
         self.module = LorentzNet(n_scalar = 2, n_hidden=72, n_layers=6, c_weight=0.005)
-        self.load_state_dict(torch.load("/home/ryanliu/LorentzNet-release/logs/top/pretrained/best-val-model.pt"))
+        self.load_state_dict(torch.load("lorentz_net/logs/top/pretrained/best-val-model.pt"))
         
     def forward(self, data):
         dtype = torch.float32

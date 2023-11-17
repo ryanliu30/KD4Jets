@@ -2,12 +2,11 @@
 import sys
 
 # 3rd party imports
-from pytorch_lightning import LightningModule
+from lightning.pytorch.core import LightningModule
 import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-import pandas as pd
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -92,7 +91,7 @@ class DeepSetTagger(nn.Module):
         
         output = self.output_layer(z)
         
-        return output, {"rep": z}
+        return output, z
     
 def norm(x):
     return torch.linalg.vector_norm(x, dim=-1, keepdim=True)
