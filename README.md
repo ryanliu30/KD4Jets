@@ -7,7 +7,7 @@
 </figure>
 
 
-[Machine Learning and Physical Science at Neurips 2023 Presentation]()
+[Machine Learning and Physical Science at Neurips 2023 Presentation](https://nips.cc/virtual/2023/76169)
     
 [arXiv paper]()
 
@@ -19,10 +19,31 @@ Welcome to code repository for Efficient and Robust Jet Tagging at the LHC with 
 
 ## Installation 
 ```
-git clone https://github.com/ryanliu30/KD4Jets.git --recursive-submodule
+git clone https://github.com/ryanliu30/KD4Jets.git --recurse-submodules
 cd KD4Jets
 conda create -n KD4Jets python=3.11
 conda activate KD4Jets
 pip install -r requirements.txt
 pip install -e .
+```
+## Usage
+To begin with, run the following command:
+```
+python train.py --cfg experiments/deepset.yaml
+```
+This will train a deepset jet tagging model from scratch. To train with knowledge distillation, run:
+```
+python train.py --cfg experiments/deepsetKD.yaml
+```
+Note that the only difference of these two config file is that $T$ was set to $-1$ for the one trained from scratch and the knowledge distillation one has $T>0$. There are two other configs `MLP.yaml` and `MLPKD.yaml` that can be run using the same command.
+
+To evaluate the models, run
+```
+python eval.py --cfg plots/example.yaml
+```
+Where in the `yaml` file you should specify the checkpoint to use. They should locate under the `LorentzNetKD` folder. We also supplied four model checkpoints from our training that can be used out of the box.
+## Citation
+If you use this work in your research, please cite:
+```
+BibTex here
 ```

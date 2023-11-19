@@ -1,15 +1,11 @@
-# system imports
-import sys
-
 # 3rd party imports
 from lightning.pytorch.core import LightningModule
 import torch
-from torch.utils.data import random_split, DataLoader
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
-from sklearn.metrics import roc_auc_score, roc_curve, RocCurveDisplay
+from sklearn.metrics import roc_auc_score, roc_curve
 import yaml
 import matplotlib
 import matplotlib.pyplot as plt
@@ -31,7 +27,10 @@ class KnowledgeDistillationBase(LightningModule):
         self.save_hyperparameters(hparams)
         
         # Initialize Datasets
-        self.loaders = retrieve_dataloaders(hparams["batch_size"], num_workers=1)
+        self.loaders = retrieve_dataloaders(
+            hparams["batch_size"],
+            num_workers=1
+        )
         
         # Initialize models
         self.student = self.get_student(hparams)
@@ -45,9 +44,10 @@ class KnowledgeDistillationBase(LightningModule):
         self.validation_step_outputs = []
         self.test_step_outputs = []
         
+        # Initialize PCA for penultimate layer visulization
         self.pca = PCA(n_components = 2)
         
-        # Initialize counter
+        # Initialize counter for KD scheduling
         self.register_buffer("num_iter", torch.tensor(0), persistent=True)
         
     def train_dataloader(self):
@@ -61,15 +61,17 @@ class KnowledgeDistillationBase(LightningModule):
         
     def get_student(self, hparams):
         """
-        return a torch.nn.Module model that is the student model. The forward() function should return logits
+        return a torch.nn.Module model that is the student model. The forward()
+        function should return logits and penultimate layer representation
         """        
-        raise NotImplementedError("You need to implement the method!")
+        raise NotImplementedError("You need to implement the forward method!")
         
     def get_teacher(self, hparams):
         """
-        return a torch.nn.Module model that is the teacher model. The forward() function should return logits
+        return a torch.nn.Module model that is the teacher model. The forward()
+        function should return logits and penultimate layer representation.
         """       
-        raise NotImplementedError("You need to implement the method!")
+        raise NotImplementedError("You need to implement the forward method!")
         
     def configure_optimizers(self):
         optimizer = [
@@ -97,23 +99,33 @@ class KnowledgeDistillationBase(LightningModule):
     @property
     def decay(self):
         if "auxiliary_teacher" in self.hparams:
-            return 1 - torch.clamp(self.num_iter/self.hparams["auxiliary_teacher"], 0, 1)
+            return 1 - torch.clamp(
+                self.num_iter / self.hparams["auxiliary_teacher"],
+                0,
+                1
+            )
         else:
             return 1
     
     def training_step(self, batch, batch_idx):
-        self.num_iter += 1
+    
         labels = batch["is_signal"].float()
         
         if self.hparams.get("boost", False):
-            batch = boost_batch(batch, self.hparams["boost"] * torch.rand_like(labels))
+            batch = boost_batch(
+                batch,
+                self.hparams["boost"] * torch.rand_like(labels)
+            )
         
         if self.hparams["T"] > 0:
             with torch.no_grad():
-                teacher_logits, teacher_features = self.teacher(batch)
-        logits, student_features = self.student(batch)
+                teacher_logits, _ = self.teacher(batch)
+        logits, _ = self.student(batch)
         
-        hard_loss = F.binary_cross_entropy_with_logits(logits[:, 1] - logits[:, 0], labels)
+        hard_loss = F.binary_cross_entropy_with_logits(
+            logits[:, 1] - logits[:, 0],
+            labels
+        )
         self.log("training_hard_loss", hard_loss)
 
         if self.hparams["T"] > 0:
@@ -123,12 +135,16 @@ class KnowledgeDistillationBase(LightningModule):
                 reduction='batchmean'
             )
             weight = self.hparams["lambda"] * self.decay
-            loss = (1-weight) * hard_loss + weight * (self.hparams["T"] ** 2) * soft_loss
+            loss = (
+                (1 - weight) * hard_loss +
+                weight * (self.hparams["T"] ** 2) * soft_loss
+            )
             self.log("training_soft_loss", soft_loss)
         else:
             loss = hard_loss
             
         self.log("training_loss", loss)
+        self.num_iter += 1
         
         return loss
     
@@ -137,11 +153,14 @@ class KnowledgeDistillationBase(LightningModule):
         labels = batch["is_signal"].float()
         
         with torch.no_grad():
-            teacher_logits, teacher_features = self.teacher(batch)
+            teacher_logits, _ = self.teacher(batch)
         logits, student_features = self.student(batch)
         logits[logits != logits] = 0
         
-        hard_loss = F.binary_cross_entropy_with_logits(logits[:, 1] - logits[:, 0], labels)
+        hard_loss = F.binary_cross_entropy_with_logits(
+            logits[:, 1] - logits[:, 0],
+            labels
+        )
         self.log("val_hard_loss", hard_loss)
 
         if self.hparams["T"] > 0:
@@ -151,7 +170,10 @@ class KnowledgeDistillationBase(LightningModule):
                 reduction='batchmean'
             )
             weight = self.hparams["lambda"] * self.decay
-            loss = (1-weight) * hard_loss + weight * (self.hparams["T"] ** 2) * soft_loss
+            loss = (
+                (1 - weight) * hard_loss +
+                weight * (self.hparams["T"] ** 2) * soft_loss
+            )
             self.log("val_soft_loss", soft_loss)
         else:
             loss = hard_loss
@@ -162,7 +184,14 @@ class KnowledgeDistillationBase(LightningModule):
         prob = F.softmax(logits, dim = -1)
         
         # Boosting Test
-        beta = torch.as_tensor(np.linspace(0, 1, self.hparams["batch_size"]//4, endpoint = False).repeat(4))
+        beta = torch.as_tensor(
+            np.linspace(
+                0,
+                1,
+                self.hparams["batch_size"] // 4,
+                endpoint = False
+            ).repeat(4)
+        )
         boosted_logits, _ = self.student(boost_batch(batch, beta))
         boosted_pred = boosted_logits.argmax(-1)
         
@@ -175,13 +204,24 @@ class KnowledgeDistillationBase(LightningModule):
         )
 
     def validation_step(self, batch, batch_idx):
-        self.validation_step_outputs.append(self.shared_evaluation(batch, batch_idx, log=True))
+        self.validation_step_outputs.append(
+            self.shared_evaluation(batch, batch_idx, log=True)
+        )
 
     def test_step(self, batch, batch_idx):
-        self.test_step_outputs.append(self.shared_evaluation(batch, batch_idx, log=True))
+        self.test_step_outputs.append(
+            self.shared_evaluation(batch, batch_idx, log=True)
+        )
     
     def make_pca_plot(self, labels, student_emb):
-        fig, (ax) = plt.subplots(nrows=1, ncols=1, figsize=(8, 8), dpi = 100, facecolor='w', edgecolor='k')
+        fig, (ax) = plt.subplots(
+            nrows=1,
+            ncols=1,
+            figsize=(8, 8),
+            dpi = 100,
+            facecolor='w',
+            edgecolor='k'
+        )
 
         colors = ['#a1c9f4' if l == 1 else '#8de5a1' for l in labels] 
             
@@ -192,18 +232,26 @@ class KnowledgeDistillationBase(LightningModule):
         ax.set_title("student's PCA")
         
         fig.tight_layout()
-        img = wandb.Image(fig, caption="Dimension Reduction of penultimate Layer's output")
+        img = wandb.Image(
+            fig, 
+            caption="Dimension Reduction of penultimate Layer's output"
+        )
         fig.clear()
         plt.close()
         return img    
     
     def make_wandb_plot(self, x_data, y_data, xtitle, ytitle, title):
-        table = wandb.Table(data=[[x, y] for (x, y) in zip(x_data, y_data)], columns = [xtitle, ytitle])
+        table = wandb.Table(
+            data=[[x, y] for (x, y) in zip(x_data, y_data)], 
+            columns = [xtitle, ytitle]
+        )
         return wandb.plot.line(table, xtitle, ytitle, title=title)
     
     def shared_on_epoch_end_eval(self, preds):
         # Transpose list of lists
-        labels, prob, student_emb, boosted_pred, beta = map(lambda x: np.concatenate(list(x), axis = 0), zip(*preds))
+        labels, prob, student_emb, boosted_pred, beta = map(
+            lambda x: np.concatenate(list(x), axis = 0), zip(*preds)
+        )
         df = pd.DataFrame({"beta": beta, "acc": (boosted_pred == labels)})
         acc_beta = df.groupby("beta").mean()
         # Evaluate model performance
@@ -216,11 +264,16 @@ class KnowledgeDistillationBase(LightningModule):
             "acc": acc,
             "rej_30": rej[0], 
             "rej_50": rej[1],           
-            "invariance score": (2 * acc_beta.mean().item() - 1)/(2 * acc_beta.max().item() - 1),
+            "invariance score": (
+                (2 * acc_beta.mean().item() - 1) /
+                (2 * acc_beta.max().item() - 1)
+            ),
         })
         
         wandb.log({
-            "Penultimate layer outputs": self.make_pca_plot(labels[:10000], student_emb[:10000]),
+            "Penultimate layer outputs": self.make_pca_plot(
+                labels[:10000], student_emb[:10000]
+            ),
             "ROC curve": self.make_wandb_plot(
                 np.interp(np.linspace(0, 1, 1001), tpr, fpr),
                 np.linspace(0, 1, 1001),
@@ -228,7 +281,13 @@ class KnowledgeDistillationBase(LightningModule):
                 "True Positive Rate",
                 "ROC curve"
             ),
-            "Accuracy vs. beta": self.make_wandb_plot(acc_beta.index, acc_beta["acc"], "beta", "Accuracy", "Accuracy vs. beta")
+            "Accuracy vs. beta": self.make_wandb_plot(
+                acc_beta.index,
+                acc_beta["acc"],
+                "beta",
+                "Accuracy",
+                "Accuracy vs. beta"
+            )
         })
 
         
@@ -252,7 +311,8 @@ class KnowledgeDistillationBase(LightningModule):
             self.trainer.global_step < self.hparams["warmup"]
         ):
             lr_scale = min(
-                1.0, float(self.trainer.global_step + 1) / self.hparams["warmup"]
+                1.0,
+                float(self.trainer.global_step + 1) / self.hparams["warmup"]
             )
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.hparams["lr"]
@@ -283,9 +343,9 @@ def boost_jets(pmu, mask, beta, mode = "x"):
             - beta * gamma * pmu[:,:,[3]] + gamma * pmu[:,:,[0]],
         ], dim = -1)
     if mode == "jet":
-        p_jets = (pmu * mask.float()[:, :, None]).sum(1) # [N, 4]
-        beta_vectors = beta * F.normalize(p_jets[:, 1:4], dim = -1).view(-1, 3, 1) # [N, 3, 1]
-        bx, by, bz = beta_vectors[:,[0]], beta_vectors[:,[1]], beta_vectors[:,[2]] # [N, 1, 1]
+        p_jets = (pmu * mask.float()[:, :, None]).sum(1)
+        beta_vectors = beta * F.normalize(p_jets[:, 1:4], dim = -1).view(-1, 3, 1)
+        bx, by, bz = beta_vectors[:,[0]], beta_vectors[:,[1]], beta_vectors[:,[2]]
         lambda_pmu = torch.cat([
               gamma * pmu[:,:,[0]] - gamma * bx * pmu[:,:,[1]] - gamma * by * pmu[:,:,[2]] - gamma * bz * pmu[:,:,[3]],
             - gamma * bx * pmu[:,:,[0]] + (1 + (gamma - 1) * bx * bx / beta.square()) * pmu[:,:,[1]] + (gamma - 1) * by * bx / beta.square() * pmu[:,:,[2]] + (gamma - 1) * bz * bx / beta.square() * pmu[:,:,[3]],
@@ -296,7 +356,14 @@ def boost_jets(pmu, mask, beta, mode = "x"):
     return lambda_pmu.masked_fill_((~mask[:, :, None]) | (lambda_pmu != lambda_pmu), 0)
 
 def boost_batch(batch, beta):
-    lambda_pmu = boost_jets(batch["Pmu"], batch["atom_mask"], beta.to(batch["Pmu"].device), mode = "x")
+    lambda_pmu = boost_jets(
+        batch["Pmu"], batch["atom_mask"],
+        beta.to(batch["Pmu"].device),
+        mode = "x"
+        )
     new_batch = batch.copy()
-    new_batch["Pmu"] = torch.cat([new_batch["Pmu"][:, :2], lambda_pmu[:, 2:]], dim = 1)
+    new_batch["Pmu"] = torch.cat(
+        [new_batch["Pmu"][:, :2], lambda_pmu[:, 2:]],
+        dim = 1
+    )
     return new_batch

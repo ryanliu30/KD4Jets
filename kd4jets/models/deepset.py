@@ -2,11 +2,8 @@
 import sys
 
 # 3rd party imports
-from lightning.pytorch.core import LightningModule
 import torch
-import numpy as np
 import torch.nn as nn
-import torch.nn.functional as F
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -20,13 +17,15 @@ class DeepSetKD(KnowledgeDistillationBase):
     
     def get_student(self, hparams):
         """
-        return a torch.nn.Module model that is the student model. The forward() function should return logits and a list of extra guidance vectors.
-        """        
+        return a torch.nn.Module model that is the student model. The forward()
+        function should return logits and penultimate layer representation
+        """
         return DeepSetTagger(**hparams)
         
     def get_teacher(self, hparams):
         """
-        return a torch.nn.Module model that is the teacher model. The forward() function should return logits and a list of extra guidance vectors.
+        return a torch.nn.Module model that is the student model. The forward()
+        function should return logits and penultimate layer representation
         """
         model = LorentzNetWrapper()
         for param in model.parameters():
@@ -34,7 +33,16 @@ class DeepSetKD(KnowledgeDistillationBase):
         return model
 
 class DeepSetTagger(nn.Module):
-    def __init__(self, d_input = 5, d_ff = 72, d_latent = 72, d_output = 2, dropout = 0., depth = 2, **kwargs):
+    def __init__(
+            self, 
+            d_input = 5,
+            d_ff = 72,
+            d_latent = 72,
+            d_output = 2,
+            dropout = 0.,
+            depth = 2,
+            **kwargs
+        ):
         super().__init__()
         
         phi_config = []
@@ -73,17 +81,37 @@ class DeepSetTagger(nn.Module):
         mask = batch["label"].float()
         Pjet = (batch["Pmu"][:, 2:] * mask[:, :, None]).sum(1)
         rel_pT = norm(batch["Pmu"][:, 2:, 1:3])/norm(Pjet[:, None, 1:3])
-        deta = torch.atanh(batch["Pmu"][:, 2:, [3]]/norm(batch["Pmu"][:, 2:, 1:4])) - torch.atanh(Pjet[:, [3]]/norm(Pjet[:, 1:4])).view(-1, 1, 1)
-        dphi = torch.atan2(batch["Pmu"][:, 2:, [2]], batch["Pmu"][:, 2:, [1]]) - torch.atan2(Pjet[:, [2]], Pjet[:, [1]]).view(-1, 1, 1)
+        deta = torch.atanh(
+            batch["Pmu"][:, 2:, [3]] / norm(batch["Pmu"][:, 2:, 1:4])
+        ) - torch.atanh(
+            Pjet[:, [3]] / norm(Pjet[:, 1:4])
+        ).view(-1, 1, 1)
+        dphi = torch.atan2(
+            batch["Pmu"][:, 2:, [2]],
+            batch["Pmu"][:, 2:, [1]]
+        ) - torch.atan2(
+            Pjet[:, [2]], Pjet[:, [1]]
+        ).view(-1, 1, 1)
         dphi = torch.remainder(dphi + torch.pi, 2 * torch.pi) - torch.pi
-        features = torch.cat([rel_pT, deta, dphi, batch["nodes"][:, 2:, :1]], dim = -1).float()
-        features.masked_fill_((~batch["label"][:, :, None]) | (features != features), 0)
-        rel_pT.masked_fill_((~batch["label"][:, :, None]) | (rel_pT != rel_pT), 0)
+        features = torch.cat(
+            [rel_pT, deta, dphi, batch["nodes"][:, 2:, :1]],
+            dim = -1
+        ).float()
+        features.masked_fill_(
+            (~batch["label"][:, :, None]) | (features != features), 0
+        )
+        rel_pT.masked_fill_(
+            (~batch["label"][:, :, None]) | (rel_pT != rel_pT), 0
+        )
         return features, mask, rel_pT.float()
         
     def forward(self, batch):
         features, mask, weights = self.preprocess(batch)
-        x = torch.zeros((*features.shape[:2], self.d_latent), dtype = features.dtype, device = features.device)
+        x = torch.zeros(
+            (*features.shape[:2], self.d_latent),
+            dtype = features.dtype,
+            device = features.device
+        )
         x[mask.squeeze() == 1] = self.phi(features[mask.squeeze() == 1])
         
         z = (x * weights).sum(1)
