@@ -1,0 +1,13 @@
+models:
+    Deepset:
+        class: DeepSet
+        ckpt: LorentzNetKD/DeepSet/checkpoints/epoch=64-step=1229865.ckpt
+    DeepsetKD:
+        class: DeepSet
+        ckpt: LorentzNetKD/DeepSetKD/checkpoints/epoch=95-step=1816416.ckpt
+    MLP:
+        class: MLP
+        ckpt: LorentzNetKD/MLP/checkpoints/epoch=6-step=132447.ckpt
+    MLPKD:
+        class: MLP
+        ckpt: LorentzNetKD/MLPKD/checkpoints/epoch=17-step=340578.ckpt
