@@ -2,7 +2,7 @@
 
 # Efficient and Robust Jet Tagging at the LHC with Knowledge Distillation
 
-[Machine Learning and Physical Science at Neurips 2023 Presentation](https://nips.cc/virtual/2023/76169)
+[Machine Learning and the Physical Sciences Workshop, NeurIPS 2023 Presentation](https://nips.cc/virtual/2023/76169)
     
 [arXiv paper]()
 
