@@ -2,11 +2,6 @@
 
 # Efficient and Robust Jet Tagging at the LHC with Knowledge Distillation
 
-<figure>
-    <img src="https://fastmachinelearning.org/hls4ml/_images/hls4ml_logo.png" width="250"/>
-</figure>
-
-
 [Machine Learning and Physical Science at Neurips 2023 Presentation](https://nips.cc/virtual/2023/76169)
     
 [arXiv paper]()
@@ -26,6 +21,7 @@ conda activate KD4Jets
 pip install -r requirements.txt
 pip install -e .
 ```
+Then, please follow the instructions in [LorentzNet](https://github.com/sdogsq/LorentzNet-release.git) to get the training data from [OSF](https://osf.io/7u3fk/?view_only=8c42f1b112ab4a43bcf208012f9db2df) and put them under the `data` directory.
 ## Usage
 To begin with, run the following command:
 ```

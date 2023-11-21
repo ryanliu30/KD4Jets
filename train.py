@@ -17,7 +17,7 @@ def parse_arguments():
     parser.add_argument("--epochs", type = int, default=100)
     parser.add_argument("--num_sanity_val_steps", type = int, default=0)
     parser.add_argument("--log_period", type = int, default=50)
-    parser.add_argument("--log_path", type = str, default=None)
+    parser.add_argument("--log_path", type = str, default="checkpoints")
     parser.add_argument("--project_name", type = str, default="LorentzNetKD")
     args = parser.parse_args()
     return args
@@ -27,6 +27,7 @@ def main():
     
     with open(args.cfg, 'r') as f:
         cfg = yaml.safe_load(f)
+    cfg.update(vars(args))
     
     if cfg["model"] == "MLP":
         model = MLPKD(cfg)
