@@ -4,7 +4,7 @@
 
 [Machine Learning and the Physical Sciences Workshop, NeurIPS 2023 Presentation](https://nips.cc/virtual/2023/76169)
     
-[arXiv paper]()
+[arXiv paper](https://arxiv.org/abs/2311.14160)
 
 [Author Contact](mailto:liuryan30@berkeley.edu)
 
