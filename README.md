@@ -41,5 +41,12 @@ Where in the `yaml` file you should specify the checkpoint to use. They should l
 ## Citation
 If you use this work in your research, please cite:
 ```
-BibTex here
+@misc{liu2023efficient,
+      title={Efficient and Robust Jet Tagging at the LHC with Knowledge Distillation}, 
+      author={Ryan Liu and Abhijith Gandrakota and Jennifer Ngadiuba and Maria Spiropulu and Jean-Roch Vlimant},
+      year={2023},
+      eprint={2311.14160},
+      archivePrefix={arXiv},
+      primaryClass={hep-ex}
+}
 ```
